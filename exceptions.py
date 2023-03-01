@@ -1,0 +1,2 @@
+class NoneValueConstant(Exception):
+    pass
