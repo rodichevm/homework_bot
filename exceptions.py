@@ -1,4 +1,4 @@
-class NoneValueConstant(Exception):
+class MessageSendindError(Exception):
     pass
 
 
