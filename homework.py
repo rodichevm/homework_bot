@@ -5,8 +5,10 @@ from http import HTTPStatus
 from logging.handlers import RotatingFileHandler
 
 import requests
-from dotenv import load_dotenv
 import telegram
+from dotenv import load_dotenv
+
+from exceptions import APIHTTPRequestError
 
 load_dotenv()
 
@@ -27,7 +29,7 @@ HOMEWORK_VERDICTS = {
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler(
-    'my_logger.log', maxBytes=50000000, backupCount=5)
+    __file__ + '.log', maxBytes=50000000, backupCount=5)
 logger.addHandler(handler)
 formatter = logging.Formatter(
     '%(asctime)s, %(funcName)s, %(levelname)s, %(message)s'
@@ -37,20 +39,27 @@ handler.setFormatter(formatter)
 
 def check_tokens():
     """Проверяем доступность переменных окружения."""
-    return all({PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID})
+    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    for token in tokens:
+        if token is None:
+            logger.critical('Отсутствует токен')
+        return token
 
 
-def send_message(robot, message):
+def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
-        robot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug('Сообщение успешно отправлено в Telegram чат')
+        bot.send_message(TELEGRAM_CHAT_ID, message)
+        logger.debug(
+            f'Сообщение {message} успешно отправлено в Telegram чат')
     except telegram.TelegramError:
-        logger.error('Не удалось отправить сообщение в Telegram чат')
+        logger.exception(
+            f'Не удалось отправить сообщение {message}в Telegram чат')
 
 
 def get_api_answer(timestamp):
     """Делает запрос к эндпоинту API."""
+    # применить последний рубеж
     try:
         response = requests.get(
             ENDPOINT,
@@ -58,32 +67,32 @@ def get_api_answer(timestamp):
             params={'from_date': timestamp}
         )
     except requests.RequestException as error:
-        return f'{error}'
-    status_code = response.status_code
-    if status_code != HTTPStatus.OK:
-        logger.error(
-            f'Код ответа {status_code}. '
-            f'Эндпоинт API {ENDPOINT} недоступен')
-        raise requests.RequestException(f'Эндпоинт API {ENDPOINT} недоступен')
-    try:
-        return response.json()
-    except requests.RequestException('Ошибка при запросе к эндпоинту'):
-        logger.error(f'Ошибка при запросе к эндпоинту API {ENDPOINT}')
+        raise Exception(
+            f'Ошибка запроса к API:{error}, '
+            f'Эндпоинт: {ENDPOINT}, Header: {HEADERS}', {timestamp}
+        )
+    if response.status_code != HTTPStatus.OK:
+        raise APIHTTPRequestError(
+            f'Эндпоинт API {ENDPOINT} недоступен. '
+            f'Код ответа API: {response.status_code}'
+        )
+    if response.json():
+        #прописать страховку на случай отказа от обслуживания
+    return response.json()
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
     if type(response) is not dict:
-        logger.error('API вернул не словарь')
-        raise TypeError
-    if response.keys() == {'homeworks', 'current_date'}:
+        # "Это dict или его наследник"
+        raise TypeError(f'API вернул не словарь, а {type(response)}')
+    if 'homeworks' in response.keys():
         if type(response['homeworks']) is not list:
-            logger.error('Тип содержимого в словаре не является списком')
-            raise TypeError
+            # logger.error
+            raise TypeError(f'Тип содержимого словаря не является не списком, а {}')
         return response.get('homeworks')
-    else:
-        logger.error('В ответе API в словаре неверные ключи')
-        raise KeyError
+    logger.exception('Хрен знает что такое последний рубеж')
+    raise KeyError('В ответе API в словаре неверные ключи')
 
 
 def parse_status(homework):
@@ -123,4 +132,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        logging.exception('Бот остановлен')
