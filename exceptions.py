@@ -1,6 +1,6 @@
-class MessageSendindError(Exception):
-    pass
+class ServerError(Exception):
+    ...
 
 
 class APIHTTPRequestError(Exception):
-    pass
+    ...
