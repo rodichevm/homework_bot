@@ -8,8 +8,6 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import APIHTTPRequestError, ServerError
-
 load_dotenv()
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -52,12 +50,12 @@ logger = logging.getLogger(__name__)
 
 def check_tokens():
     """Проверяем доступность переменных окружения."""
-    # tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-    # for token in tokens:
-    #     if token is None:
-    #         logger.critical(NO_VARIABLE.format(token=token))
-    #     raise ValueError(NO_VARIABLE.format(token=token))
-    return all({PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID})
+    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    for token in tokens:
+        if token is None:
+            logger.critical(NO_VARIABLE.format(token=token))
+            sys.exit(NO_VARIABLE.format(token=token))
+        return True
 
 
 def send_message(bot, message):
@@ -74,12 +72,16 @@ def get_api_answer(timestamp):
     """Делает запрос к эндпоинту API."""
     rq_pars = dict(
         url=ENDPOINT, headers=HEADERS, params={'from_date': timestamp})
-    response = requests.get(**rq_pars)
-    if response.status_code != HTTPStatus.OK:
-        raise APIHTTPRequestError(API_FAILED_RESPONSE.format(
-            status_code=response.status_code, **rq_pars)
-        )
     try:
+        response = requests.get(**rq_pars)
+        if response.status_code != HTTPStatus.OK:
+            raise Exception(API_FAILED_RESPONSE.format(
+                status_code=response.status_code, **rq_pars)
+            )
+        if 'code' in response.json():
+            raise Exception(API_FAILED_REQUEST.format(**rq_pars))
+        if 'error' in response.json():
+            raise Exception(API_FAILED_REQUEST.format(**rq_pars))
         return response.json()
     except requests.RequestException as error:
         raise Exception(API_FAILED_REQUEST.format(error=error, **rq_pars))
@@ -118,12 +120,10 @@ def main():
         try:
             api_answer = get_api_answer(timestamp)
             homeworks = check_response(api_answer)
-            if homeworks:
-                message = parse_status(homeworks[0])
-                send_message(bot, message)
+            if len(homeworks) != 0:
+                send_message(bot, parse_status(homeworks[0]))
         except Exception as error:
             send_message(bot, ERROR_GLOBAL.format(error=error))
-            logger.exception(error)
         time.sleep(RETRY_PERIOD)
 
 
