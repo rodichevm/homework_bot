@@ -30,8 +30,9 @@ UNSUCCESSFUL_SENT_MESSAGE = (
     'Не удалось отправить сообщение "{message}. Ошибка:{error}"')
 STATUS_MESSAGE = 'Изменился статус проверки работы "{homework_name}".{verdict}'
 UNEXPECTED_STATUS = 'Неожиданный статус домашней работы:"{status}"'
-UNEXPECTED_TYPE_LIST = 'Ответ API не вернул список(list), а вернул тип: {type}'
-UNEXPECTED_TYPE_DICT = 'Ответ API не вернул список(dict), а вернул тип: {type}'
+UNEXPECTED_TYPE_LIST_HOMEWORKS = (
+    'Ответ API вернул не список по ключу "homeworks", а вернул тип: {type}')
+UNEXPECTED_TYPE_DICT = 'Ответ API вернул не словарь, а вернул тип: {type}'
 UNEXPECTED_API_RESPONSE = (
     'Ответ API не соответствует документации({response}).{error}')
 API_FAILED_RESPONSE = (
@@ -63,6 +64,7 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug(SUCCESSFUL_SENT_MESSAGE.format(message=message))
+        return True
     except telegram.TelegramError as error:
         logger.exception(UNSUCCESSFUL_SENT_MESSAGE.format(
             message=message, error=error))
@@ -75,7 +77,7 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(**request_params)
     except requests.RequestException as error:
-        raise ValueError(
+        raise requests.ConnectionError(
             API_FAILED_REQUEST.format(error=error, **request_params))
     if response.status_code != HTTPStatus.OK:
         raise ValueError(API_FAILED_RESPONSE.format(
@@ -99,14 +101,14 @@ def check_response(response):
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
         raise TypeError(
-            UNEXPECTED_TYPE_LIST.format(type=type(homeworks)))
+            UNEXPECTED_TYPE_LIST_HOMEWORKS.format(type=type(homeworks)))
     return homeworks
 
 
 def parse_status(homework):
     """Возвращает статус домашней работы."""
     if 'homework_name' not in homework:
-        raise ValueError(NO_KEY_HOMEWORK_NAME)
+        raise KeyError(NO_KEY_HOMEWORK_NAME)
     status = homework.get('status')
     if status not in HOMEWORK_VERDICTS:
         raise ValueError(UNEXPECTED_STATUS.format(status=status))
