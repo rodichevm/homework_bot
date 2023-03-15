@@ -68,6 +68,7 @@ def send_message(bot, message):
     except telegram.TelegramError as error:
         logger.exception(UNSUCCESSFUL_SENT_MESSAGE.format(
             message=message, error=error))
+        return False
 
 
 def get_api_answer(timestamp):
@@ -77,7 +78,7 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(**request_params)
     except requests.RequestException as error:
-        raise requests.ConnectionError(
+        raise ConnectionError(
             API_FAILED_REQUEST.format(error=error, **request_params))
     if response.status_code != HTTPStatus.OK:
         raise ValueError(API_FAILED_RESPONSE.format(
@@ -154,7 +155,7 @@ if __name__ == '__main__':
         logger.exception(f'Программа была остановлена:{error}')
     # for testing
     # from unittest import TestCase, mock, main as uni_main
-    # # JSON = {'error': 'testing'}
+    # JSON = {'error': 'testing'}
     # JSON = {'homeworks': [{'homework_name': 'test', 'status': 'approved'}]}
     # class TestReq(TestCase):
     #     @mock.patch('requests.get')
